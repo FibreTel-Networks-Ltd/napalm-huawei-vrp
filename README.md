@@ -2,7 +2,7 @@
 [![PyPI](https://img.shields.io/pypi/dm/napalm-huawei-vrp.svg)](https://pypi.python.org/pypi/napalm-huawei-vrp)
 # CHANGES
 
-Added support for Slave MPU secondary confirmation on save. Tested on CE12800
+Added support for Slave MPU secondary confirmation on save.
 
 # NAPALM Huawei VRP
 
