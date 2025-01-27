@@ -876,8 +876,6 @@ class VRPDriver(NetworkDriver):
         return lldp_neighbors
 
     # develop bgp
-    import re
-
     def get_bgp_neighbors(self):
         neighbors = {}
         command_output = self.device.send_command("display bgp peer")
