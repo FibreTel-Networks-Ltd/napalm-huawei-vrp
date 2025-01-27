@@ -875,6 +875,59 @@ class VRPDriver(NetworkDriver):
         lldp_neighbors = {}
         return lldp_neighbors
 
+    # develop bgp
+    import re
+
+    def get_bgp_neighbors(self):
+        neighbors = {}
+        command_output = self.device.send_command("display bgp peer")
+    
+        # Extract router ID and local AS
+        router_id_match = re.search(r"BGP local router ID : (\S+)", command_output)
+        local_as_match = re.search(r"Local AS number : (\d+)", command_output)
+
+        if router_id_match:
+            neighbors["router_id"] = router_id_match.group(1)
+        if local_as_match:
+            neighbors["local_as"] = int(local_as_match.group(1))
+    
+        # Parse peer information
+        neighbors["peers"] = {}
+        peer_regex = re.compile(
+            r"^\s*(\S+)\s+\d+\s+(\d+)\s+\d+\s+\d+\s+\d+\s+([\d\w]+)\s+(\w+)\s+(\d+)",
+            re.MULTILINE
+        )
+        for match in peer_regex.finditer(command_output):
+            ip, remote_as, _, state, prefixes_received = match.groups()
+            neighbors["peers"][ip] = {
+                "remote_as": int(remote_as),
+                "is_up": state.lower() == "established",
+                "received_prefixes": int(prefixes_received)
+            }
+        return neighbors
+
+    def get_bgp_neighbors_detail(self):
+        details = []
+        command_output = self.device.send_command("display bgp peer verbose")
+    
+        # Parse detailed peer information
+        peer_regex = re.compile(
+            r"BGP Peer is (\S+),\s+remote AS (\d+).*?Description: \"(.*?)\".*?"
+            r"Up for (.*?).*?Received total routes: (\d+).*?Advertised total routes: (\d+)",
+            re.DOTALL
+        )
+        for match in peer_regex.finditer(command_output):
+            ip, remote_as, description, uptime, received_routes, advertised_routes = match.groups()
+            details.append({
+                "ip": ip,
+                "remote_as": int(remote_as),
+                "description": description.strip(),
+                "uptime": uptime.strip(),
+                "received_routes": int(received_routes),
+                "advertised_routes": int(advertised_routes),
+            })
+        return details
+
     # verified
     def get_arp_table(self, vrf=""):
         """
