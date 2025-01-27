@@ -1,5 +1,8 @@
 [![PyPI](https://img.shields.io/pypi/v/napalm-huawei-vrp.svg)](https://pypi.python.org/pypi/napalm-huawei-vrp)
 [![PyPI](https://img.shields.io/pypi/dm/napalm-huawei-vrp.svg)](https://pypi.python.org/pypi/napalm-huawei-vrp)
+# CHANGES
+
+Added support for Slave MPU secondary confirmation on save. Tested on CE12800
 
 # NAPALM Huawei VRP
 
