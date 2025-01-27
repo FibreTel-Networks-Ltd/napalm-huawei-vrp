@@ -1972,43 +1972,42 @@ class VRPDriver(NetworkDriver):
         command = "delete /unreserved /quiet {0}".format(filename)
         self.device.send_command(command)
 
-def _save_config(self, filename=""):
-    """
-    Save the current running config to the given file, handling
-    multiple Y/N prompts (master and slave) using send_command_timing().
-    """
-    # Construct the 'save' command, e.g. "save config_20250127_1603.cfg"
-    command = f"save {filename}" if filename else "save"
+    def _save_config(self, filename=""):
+        """
+        Save the current running config to the given file, handling
+        multiple Y/N prompts (master and slave) using send_command_timing().
+        """
+        # Construct the 'save' command, e.g. "save config_20250127_1603.cfg"
+        command = f"save {filename}" if filename else "save"
     
-    # Step 1: Send the save command using send_command_timing()
-    # which doesn't strictly require a regex to proceed
-    save_log = self.device.send_command_timing(command)
+        # Step 1: Send the save command using send_command_timing()
+        # which doesn't strictly require a regex to proceed
+        save_log = self.device.send_command_timing(command)
     
-    # Step 2: Check for a Y/N or "Are you sure" prompt in the output
-    if ("[Y/N]" in save_log) or ("Are you sure" in save_log):
-        # Send "y" to confirm saving on the master
-        save_log += self.device.send_command_timing("y")
+        # Step 2: Check for a Y/N or "Are you sure" prompt in the output
+        if ("[Y/N]" in save_log) or ("Are you sure" in save_log):
+            # Send "y" to confirm saving on the master
+            save_log += self.device.send_command_timing("y")
     
-    # Step 3: Look for the second prompt referencing "slave" or Y/N
-    # Some devices might show "Warning: Are you sure to save the configuration to slave..."
-    if ("[Y/N]" in save_log) or ("Are you sure" in save_log) or ("slave" in save_log.lower()):
-        # Send "y" again for the second prompt
-        save_log += self.device.send_command_timing("y")
+        # Step 3: Look for the second prompt referencing "slave" or Y/N
+        # Some devices might show "Warning: Are you sure to save the configuration to slave..."
+        if ("[Y/N]" in save_log) or ("Are you sure" in save_log) or ("slave" in save_log.lower()):
+            # Send "y" again for the second prompt
+            save_log += self.device.send_command_timing("y")
 
-    # Optionally do a final read to ensure we get back to the normal prompt
-    # (send an empty string or newline)
-    save_log += self.device.send_command_timing("")
+        # Optionally do a final read to ensure we get back to the normal prompt
+        # (send an empty string or newline)
+        save_log += self.device.send_command_timing("")
 
-    # Step 4: Verify we see "successfully" in the output
-    search_result = re.search(r"successfully", save_log, re.IGNORECASE)
-    if search_result is None:
-        msg = f"Failed to save config. Command output:\n{save_log}"
-        raise CommandErrorException(msg)
+        # Step 4: Verify we see "successfully" in the output
+        search_result = re.search(r"successfully", save_log, re.IGNORECASE)
+        if search_result is None:
+            msg = f"Failed to save config. Command output:\n{save_log}"
+            raise CommandErrorException(msg)
 
     def _load_config(self, config_file):
         command = "rollback configuration to file {0}".format(config_file)
         rollback_result = self.device.send_command(command, expect_string=r"Y/N")
-        rollback_result += self.device.send_command("y", expect_string=r"[<\[].+[>\]]")
         search_result = re.search("clear the information", rollback_result, re.M)
         if search_result is not None:
             rollback_result += self.device.send_command("y", expect_string=r"<.+>")
