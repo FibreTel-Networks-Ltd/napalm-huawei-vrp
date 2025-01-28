@@ -73,37 +73,41 @@ class VRPDriver(NetworkDriver):
         return dict(bgp_neighbors)
 
     def get_bgp_neighbors_detail(self):
+        """
+        Fetch detailed BGP neighbor information.
+        """
         bgp_neighbors_detail = []
         output = self.cli(["display bgp peer verbose"])["display bgp peer verbose"]
 
-        # Regular expression for parsing verbose BGP details
+        # Shared regex
         verbose_regex = (
             r"BGP Peer is (?P<peer>[\d.:]+),\s+remote AS (?P<remote_as>\d+).*?"
-            r"Peer's description: \"(?P<description>[^"]*)\".*?"
+            r"Peer's description: \"(?P<description>[^\"]*)\".*?"
             r"Remote router ID (?P<remote_id>[\d.]+).*?"
             r"BGP current state: Established, Up for (?P<uptime>[\dhms]+).*?"
             r"Received total routes: (?P<accepted_prefixes>\d+).*?"
             r"Advertised total routes: (?P<sent_prefixes>\d+)"
         )
 
-        # Parse verbose output
+        # Parse the output
         for match in re.finditer(verbose_regex, output, re.DOTALL):
             bgp_neighbors_detail.append({
                 "remote_as": int(match.group("remote_as")),
                 "remote_id": match.group("remote_id"),
                 "description": match.group("description"),
-                "is_up": True,
+               "is_up": True,
                 "uptime": self.convert_uptime(match.group("uptime")),
                 "address_family": {
                     "ipv4": {
                         "sent_prefixes": int(match.group("sent_prefixes")),
                         "accepted_prefixes": int(match.group("accepted_prefixes")),
-                        "received_prefixes": int(match.group("accepted_prefixes")),
+                        "received_prefixes": int(match.group("accepted_prefixes")),  # Huawei doesn't separate prefixes
                     }
                 },
             })
 
         return bgp_neighbors_detail
+
 
     def get_ipv6_neighbors_table(self):
         ipv6_neighbors_table = []
