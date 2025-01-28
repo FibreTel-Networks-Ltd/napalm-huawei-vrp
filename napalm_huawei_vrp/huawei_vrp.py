@@ -877,54 +877,208 @@ class VRPDriver(NetworkDriver):
 
     # develop bgp
     def get_bgp_neighbors(self):
-        neighbors = {}
-        command_output = self.device.send_command("display bgp peer")
-    
-        # Extract router ID and local AS
-        router_id_match = re.search(r"BGP local router ID : (\S+)", command_output)
-        local_as_match = re.search(r"Local AS number : (\d+)", command_output)
+        bgp_neighbors = defaultdict(lambda: dict(peers={}))
 
-        if router_id_match:
-            neighbors["router_id"] = router_id_match.group(1)
-        if local_as_match:
-            neighbors["local_as"] = int(local_as_match.group(1))
-    
-        # Parse peer information
-        neighbors["peers"] = {}
-        peer_regex = re.compile(
-            r"^\s*(\S+)\s+\d+\s+(\d+)\s+\d+\s+\d+\s+\d+\s+([\d\w]+)\s+(\w+)\s+(\d+)",
-            re.MULTILINE
+        # Fetch command outputs
+        ipv4_output = self.run_command("display bgp peer")
+        ipv6_output = self.run_command("display bgp ipv6 peer")
+        verbose_output = self.run_command("display bgp peer verbose")
+
+        # Regular expressions for parsing IPv4 and IPv6 neighbors
+        ipv4_regex = r"(?P<peer>[\d.]+)\s+\d+\s+(?P<remote_as>\d+).*?Established\s+(?P<pref_rcv>\d+)"
+        ipv6_regex = r"(?P<peer>[a-fA-F0-9:]+)\s+\d+\s+(?P<remote_as>\d+).*?Established\s+(?P<pref_rcv>\d+)"
+        verbose_regex = (
+            r"BGP Peer is (?P<peer>[\d.:]+),\s+remote AS (?P<remote_as>\d+).*?"
+            r"Peer's description: \"(?P<description>[^\"]*)\".*?"
+            r"Remote router ID (?P<remote_id>[\d.]+).*?"
+            r"BGP current state: Established, Up for (?P<uptime>[\dhms]+)"
         )
-        for match in peer_regex.finditer(command_output):
-            ip, remote_as, _, state, prefixes_received = match.groups()
-            neighbors["peers"][ip] = {
-                "remote_as": int(remote_as),
-                "is_up": state.lower() == "established",
-                "received_prefixes": int(prefixes_received)
+
+        # Parse verbose output for additional details
+        verbose_details = {}
+        for match in re.finditer(verbose_regex, verbose_output, re.DOTALL):
+            peer = match.group("peer")
+            verbose_details[peer] = {
+                "description": match.group("description"),
+                "remote_id": match.group("remote_id"),
+                "uptime": self.convert_uptime(match.group("uptime")),
             }
-        return neighbors
 
-    def get_bgp_neighbors_detail(self):
-        details = []
-        command_output = self.device.send_command("display bgp peer verbose")
-    
-        # Parse detailed peer information
-        peer_regex = re.compile(
-            r"BGP Peer is (\S+),\s+remote AS (\d+).*?Description: \"(.*?)\".*?"
-            r"Up for (.*?).*?Received total routes: (\d+).*?Advertised total routes: (\d+)",
-            re.DOTALL
+        # Parse IPv4 neighbors
+        for match in re.finditer(ipv4_regex, ipv4_output):
+            peer = match.group("peer")
+            remote_as = int(match.group("remote_as"))
+            received_prefixes = int(match.group("pref_rcv"))
+
+            # Enrich with verbose details if available
+            verbose_data = verbose_details.get(peer, {})
+            description = verbose_data.get("description", "")
+            remote_id = verbose_data.get("remote_id", "")
+            uptime = verbose_data.get("uptime", 0)
+
+            # Populate the neighbor details
+            bgp_neighbors["global"]["peers"][peer] = {
+                "remote_as": remote_as,
+                "remote_id": remote_id,
+                "is_up": True,
+                "is_enabled": True,
+                "description": description,
+                "uptime": uptime,
+                "address_family": {
+                    "ipv4": {
+                        "sent_prefixes": 0,  # Sent prefixes are unavailable in the base command; default to 0
+                        "accepted_prefixes": received_prefixes,
+                        "received_prefixes": received_prefixes,
+                    }
+                },
+            }
+
+        # Parse IPv6 neighbors
+        for match in re.finditer(ipv6_regex, ipv6_output):
+            peer = match.group("peer")
+            remote_as = int(match.group("remote_as"))
+            received_prefixes = int(match.group("pref_rcv"))
+
+            # Enrich with verbose details if available
+            verbose_data = verbose_details.get(peer, {})
+            description = verbose_data.get("description", "")
+            remote_id = verbose_data.get("remote_id", "")
+            uptime = verbose_data.get("uptime", 0)
+
+            # Populate the neighbor details
+            bgp_neighbors["global"]["peers"][peer] = {
+                "remote_as": remote_as,
+                "remote_id": remote_id,
+                "is_up": True,
+                "is_enabled": True,
+                "description": description,
+                "uptime": uptime,
+                "address_family": {
+                    "ipv6": {
+                        "sent_prefixes": 0,  # Sent prefixes are unavailable in the base command; default to 0
+                        "accepted_prefixes": received_prefixes,
+                        "received_prefixes": received_prefixes,
+                    }
+                },
+            }
+
+        return dict(bgp_neighbors)
+
+    def convert_uptime(self, uptime_str):
+        match = re.match(r"(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?", uptime_str)
+        if not match:
+            return 0
+        days, hours, minutes, seconds = match.groups(default="0")
+        return int(days) * 86400 + int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+
+
+    # Parse IPv6 neighbors
+    for match in re.finditer(ipv6_regex, ipv6_output):
+        peer = match.group("peer")
+        remote_as = int(match.group("remote_as"))
+        received_prefixes = int(match.group("pref_rcv"))
+
+        # Enrich with verbose details if available
+        verbose_data = verbose_details.get(peer, {})
+        description = verbose_data.get("description", "")
+        remote_id = verbose_data.get("remote_id", "")
+        uptime = verbose_data.get("uptime", 0)
+
+        # Populate the neighbor details
+        bgp_neighbors["global"]["peers"][peer] = {
+            "remote_as": remote_as,
+            "remote_id": remote_id,
+            "is_up": True,
+            "is_enabled": True,
+            "description": description,
+            "uptime": uptime,
+            "address_family": {
+                "ipv6": {
+                    "sent_prefixes": 0,  # Sent prefixes are unavailable in the base command; default to 0
+                    "accepted_prefixes": received_prefixes,
+                    "received_prefixes": received_prefixes,
+                }
+            },
+        }
+
+     return dict(bgp_neighbors)
+
+
+    def get_bgp_neighbors_detail(self, neighbor_address=""):
+        """
+        Return detailed BGP neighbor information.
+        If neighbor_address is specified, only return details for that neighbor.
+        """
+        # Fetch command outputs
+        verbose_output = self.run_command("display bgp peer verbose")
+        advertisements_output = self.run_command("display bgp peer")
+        
+        # Regular expression for parsing verbose BGP details
+        verbose_regex = (
+            r"BGP Peer is (?P<peer>[\d.:]+),\s+remote AS (?P<remote_as>\d+).*?"
+            r"Peer's description: \"(?P<description>[^\"]*)\".*?"
+            r"Remote router ID (?P<remote_id>[\d.]+).*?"
+            r"BGP current state: Established, Up for (?P<uptime>[\dhms]+).*?"
+            r"Received total routes: (?P<accepted_prefixes>\d+).*?"
+            r"Advertised total routes: (?P<sent_prefixes>\d+)"
         )
-        for match in peer_regex.finditer(command_output):
-            ip, remote_as, description, uptime, received_routes, advertised_routes = match.groups()
-            details.append({
-                "ip": ip,
-                "remote_as": int(remote_as),
-                "description": description.strip(),
-                "uptime": uptime.strip(),
-                "received_routes": int(received_routes),
-                "advertised_routes": int(advertised_routes),
+
+        bgp_neighbors_detail = defaultdict(list)
+
+        # Parse verbose output
+        for match in re.finditer(verbose_regex, verbose_output, re.DOTALL):
+            peer = match.group("peer")
+            remote_as = int(match.group("remote_as"))
+            description = match.group("description")
+            remote_id = match.group("remote_id")
+            uptime = self.convert_uptime(match.group("uptime"))
+            sent_prefixes = int(match.group("sent_prefixes"))
+            accepted_prefixes = int(match.group("accepted_prefixes"))
+
+            if neighbor_address and peer != neighbor_address:
+                continue
+
+            bgp_neighbors_detail["global"].append({
+                "remote_as": remote_as,
+                "remote_id": remote_id,
+                "description": description,
+                "is_up": True,
+                "uptime": uptime,
+                "address_family": {
+                    "ipv4": {
+                        "sent_prefixes": sent_prefixes,
+                        "accepted_prefixes": accepted_prefixes,
+                        "received_prefixes": accepted_prefixes,  # Huawei doesn't separate received prefixes.
+                    }
+                }
             })
-        return details
+
+        return dict(bgp_neighbors_detail)
+
+    def get_ipv6_neighbors_table(self):
+        """
+        Return a detailed table of IPv6 neighbors.
+        """
+        ipv6_neighbors_table = []
+        ipv6_output = self.run_command("display ipv6 neighbors")
+
+        # Regular expression for parsing IPv6 neighbors
+        ipv6_regex = (
+            r"(?P<ip>[a-fA-F0-9:]+)\s+(?P<mac>[a-fA-F0-9-]+)\s+"
+            r"(?P<interface>\S+)\s+(?P<state>\S+)"
+        )
+
+        # Parse IPv6 neighbors
+        for match in re.finditer(ipv6_regex, ipv6_output):
+            ipv6_neighbors_table.append({
+                "interface": match.group("interface"),
+                "mac": match.group("mac"),
+                "ip": match.group("ip"),
+                "age": float(-1),  # Age is not provided in Huawei's command output
+                "state": match.group("state"),
+            })
+
+        return ipv6_neighbors_table
 
     # verified
     def get_arp_table(self, vrf=""):
