@@ -24,10 +24,12 @@ class VRPDriver(NetworkDriver):
         # Regular expressions for parsing
         peer_regex = r"(?P<peer>[\d.:]+)\s+\d+\s+(?P<remote_as>\d+).*?Established.*?(?P<prefixes>\d+)"
         verbose_regex = (
-            r"BGP Peer is (?P<peer>[\d.:]+),\s+remote AS (?P<remote_as>\d+).*?"
-            r"Peer's description: \"(?P<description>[^"]*)\".*?"
-            r"Remote router ID (?P<remote_id>[\d.]+).*?"
-            r"BGP current state: Established, Up for (?P<uptime>[\dhms]+)"
+        r"BGP Peer is (?P<peer>[\d.:]+),\s+remote AS (?P<remote_as>\d+).*?"
+        r'Peer\'s description: "(?P<description>[^"]*)".*?'
+        r"Remote router ID (?P<remote_id>[\d.]+).*?"
+        r"BGP current state: Established, Up for (?P<uptime>[\dhms]+).*?"
+        r"Received total routes: (?P<accepted_prefixes>\d+).*?"
+        r"Advertised total routes: (?P<sent_prefixes>\d+)"
         )
 
         # Parse verbose output for additional details
