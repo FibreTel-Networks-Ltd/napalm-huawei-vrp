@@ -1,237 +1,74 @@
 [![PyPI](https://img.shields.io/pypi/v/napalm-huawei-vrp.svg)](https://pypi.python.org/pypi/napalm-huawei-vrp)
 [![PyPI](https://img.shields.io/pypi/dm/napalm-huawei-vrp.svg)](https://pypi.python.org/pypi/napalm-huawei-vrp)
-# CHANGES
 
-Added support for Slave MPU secondary confirmation on save.
+# NAPALM Huawei VRP — FibreTel Fork
 
-# NAPALM Huawei VRP
+This is a fork of the upstream [napalm-huawei-vrp](https://github.com/napalm-automation-community/napalm-huawei-vrp) driver, which has been dormant since 2022. The upstream driver has several unimplemented stubs and bugs that prevent it from working correctly on modern VRP8 hardware.
 
-It's a NAPALM Community Driver for Huawei VRP5/VRP8 Enterprise/Service Provider Routers and Switches.
+This fork focuses on making the driver functional for real-world SP deployments, specifically tested against **Huawei NE8000** running VRP8.
 
-This repository is reference [NAPALM-CE](https://github.com/napalm-automation-community/napalm-ce) and Cisco IOS code, thanks for thdDaniel's contribution
-[中文版](README-ZH.md)
+## Changes from upstream
 
-## Supported Huawei Network Devices
+- **Implemented `get_bgp_neighbors_detail()`** — was a stub (`pass`) in upstream. Now parses `display bgp peer` and `display bgp peer <ip> verbose` output. Returns all fields required by Peering Manager's `poll_bgp_sessions` job including `connection_state`, `remote_address`, prefix counts, flap count, uptime, and hold time.
+- **Fixed `_save_config()`** — handles multiple Y/N prompts for master/slave MPU confirmation.
 
-* NE Series: 
-    * 40E, 8000
-* AR Series:
-    * 2200
-* ATN 900 Series:
-    * 910B, 910C and 910D
-* S Switch Series:
-    * S5700, S6700
+## Tested hardware
 
-This driver is not limited to these models and series, these are just devices where the driver have been tested.
+| Device | VRP Version | Status |
+|--------|------------|--------|
+| NE8000 | VRP8 | ✅ Tested |
 
-## Instructions
-
-The driver is under development and iteration.
+## Supported APIs
 
 ### Get info
-| API   | Description  |
-|--------|-----|
-|  get_facts()                |  Return general device information |
-|  get_config()               |  Read config |
-|  get_arp_table()            |  Get device ARP table |
-|  get_mac_address_table()    |  Get mac table of connected devices |
-|  get_interfaces()           |  Get interface information |
-|  get_interfaces_ip()        |  Get interface IP information  |
-|  get_interfaces_counters()  |  Get interface counters  |
-|  get_lldp_neighbors()       |  Fetch LLDP neighbor information |
-
+| API | Description |
+|-----|-------------|
+| `get_facts()` | Return general device information |
+| `get_config()` | Read config |
+| `get_arp_table()` | Get device ARP table |
+| `get_mac_address_table()` | Get mac table of connected devices |
+| `get_interfaces()` | Get interface information |
+| `get_interfaces_ip()` | Get interface IP information |
+| `get_interfaces_counters()` | Get interface counters |
+| `get_lldp_neighbors()` | Fetch LLDP neighbor information |
+| `get_bgp_neighbors()` | Get BGP neighbor summary |
+| `get_bgp_neighbors_detail()` | Get detailed BGP neighbor state (global VRF) |
 
 ### Config
+| API | Description |
+|-----|-------------|
+| `cli()` | Send any CLI commands |
+| `load_merge_candidate()` | Load config |
+| `compare_config()` | Diff running vs candidate config |
+| `discard_config()` | Discard candidate config |
+| `commit_config()` | Commit candidate config |
 
-| API   | Description  |
-|--------|-----|
-|  cli()                      |  Send any cli commands  |
-|  load_merge_candidate()     |  Load config |
-|  compare_config()           |  A string showing the difference between the running configuration and the candidate configuration |
-|  discard_config()           |  Discards the configuration loaded into the candidate |
-|  commit_config()            |  Commits the changes requested by the method load_replace_candidate or load_merge_candidate |
+### Other
+| API | Description |
+|-----|-------------|
+| `is_alive()` | Get device active status |
+| `ping()` | Ping remote IP |
 
-
-### Other tools
-| API   | Description  |
-|--------|-----|
-|  is_active()                |  get devices active status  |
-|  ping()                     |  Ping remote ip  |
-
-
-### Plans to develop
-
-* get_bgp_config
-* get_bgp_neighbors
-* get_bgp_neighbors_detail
-* get_environment
-* get_ipv6_neighbors_table
-* get_lldp_neighbors_detail
-* get_network_instances
-* get_ntp_peers
-* get_ntp_servers
-* get_ntp_stats
-* get_optics
-* get_route_to
-* get_snmp_information
-* get_users
-* get_vlans
-
-
-## How to Install
-
-You can install napalm-huawei-vrp with pip:
-
-`pip install napalm-huawei-vrp`
-
-That will install napalm and huawei_vrp driver currently available.
-
-## How to upgrade
-
-You can upgrade napalm-huawei-vrp with pip once the new version released:
-
-`pip install --upgrade napalm-huawei-vrp`
-
-check the package version.
-
-`pip list | grep napalm-huawei-vrp`
-
+## Installation
+```bash
+pip install git+https://github.com/FibreTel-Networks-Ltd/napalm-huawei-vrp.git
+```
 
 ## Quick start
-
 ```python
 from napalm import get_network_driver
 driver = get_network_driver('huawei_vrp')
-device = driver(hostname='192.168.76.10', username='admin', password='this_is_not_a_secure_password')
+device = driver(hostname='192.168.76.10', username='admin', password='password')
 device.open()
-
-# Send Any CLI command
-send_command = device.cli(['dis version'])
-
-#  Return general device information
-get_facts = device.get_facts()
-print(get_facts)
-
-# other API
-device.get_config()
-device.get_arp_table()
-device.get_mac_address_table()
-device.get_interfaces()
-device.get_interfaces_ip()
-device.get_interfaces_counters()
-device.get_lldp_neighbors()
-
+print(device.get_bgp_neighbors_detail())
+device.close()
 ```
 
-## Merging Configuration and Diff Modes
+## Notes
 
-The driver supports two diff modes when merging configuration:
+- `get_bgp_neighbors_detail()` currently only polls the global VRF. VPN-instance peers are not yet supported.
+- Tested with Peering Manager 1.10.3 BGP session polling.
 
-* **non-contextual diff** (default behavior)
-* **contextual diff** (as proposed in PR [#23](https://github.com/napalm-automation-community/napalm-huawei-vrp/pull/23))
+## Original project
 
-The second mode can be set during driver instantiation:
-
-```py
-from napalm import get_network_driver
-
-driver = get_network_driver('huawei_vrp')
-device = driver(
-    hostname='192.168.76.10',
-    username='admin',
-    password='this_is_not_a_secure_password',
-    optional_args={'contextual_diff': True}  # enable contextual diff mode
-)
-device.open()
-
-# Merging Configuration
-device.load_merge_candidate(config=candidate)  # candidate is an str
-print(device.compare_config())
-```
-
-The contextual mode is smarter as **it computes the diff per config section.** You might want to enable it.
-
-### Example
-
-Say we have these configs:
-
-<table>
- <thead>
-  <tr>
-   <th>Candidate (to merge into the running)</th>
-   <th>Running (extract only)</th>
-  </tr>
- </thead>
- <tbody>
-  <tr>
-   <td>
-
-```sh
-#
-interface GigabitEthernet0/0/2
- undo portswitch
- undo shutdown
- l2 binding vsi CUST
-#
-bgp 1234
- router-id 1.2.3.4
- ipv4-family vpn-instance SOME-VPN
-  import-route direct
-#
-```
-   </td>
-   <td>
-
-```sh
-#
-interface GigabitEthernet0/0/1
- description CustomerA
- undo portswitch
- l2 binding vsi CUST
-#
-interface GigabitEthernet0/0/2
- description CustomerB
- shutdown
-#
-bgp 1234
- router-id 1.2.3.4
- ipv4-family vpn-instance SOME-VPN
-  import-route static
-#
-```
-   </td>
-  </tr>
- </tbody>
-</table>
-
-`device.compare_config()` will result in:
-
-```sh
-# Non-contextual diff (default mode)
-
- undo shutdown
-  import-route direct
-```
-
-```diff
-# Contextual diff
-
- interface GigabitEthernet0/0/2
-+ undo portswitch
-+ undo shutdown
-+ l2 binding vsi CUST
- bgp 1234
-  ipv4-family vpn-instance SOME-VPN
-+  import-route direct
-```
-
-## Contact
-### Slack
-
-Slack is probably the easiest way to get help with NAPALM. You can find us in the channel napalm on the [network.toCode()](https://networktocode.herokuapp.com/) team.
-
-## News
-### YouTube Videos
-* [NAPALM Network Automation Python: Working with Huawei VRP](https://youtu.be/40Z-hcPHY_M) by Michael Alvarez
-* [NAPALM Network Automation Python: Collect Data from Multiple Vendors. Cisco and Huawei](https://youtu.be/wBuKua1QsUE) by Michael Alvarez
-* [NAPALM Network Automation Python: Making Configurations in a Multivendor Network. Cisco and Huawei](https://youtu.be/QnXhCzaSvBw) by Michael Alvarez
+https://github.com/napalm-automation-community/napalm-huawei-vrp
