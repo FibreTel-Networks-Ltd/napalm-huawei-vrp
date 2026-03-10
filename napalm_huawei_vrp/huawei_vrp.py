@@ -1685,8 +1685,89 @@ class VRPDriver(NetworkDriver):
         pass
 
     # develop
-    def get_bgp_neighbors_detail(self):
-        pass
+    def get_bgp_neighbors_detail(self, neighbor_address=""):
+        """
+        Return detailed BGP neighbor information.
+        Implemented for Huawei NE8000/CE VRP based on 'display bgp peer X verbose' output.
+        """
+        bgp_detail = {}
+        command_bgp_peer = "display bgp peer"
+        output_peer = self.device.send_command(command_bgp_peer)
+        if not output_peer:
+            return bgp_detail
+        re_global_router_id = r"BGP local router ID :\s+(?P<glob_router_id>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
+        re_global_local_as = r"Local AS number :\s+(?P<local_as>{})".format(ASN_REGEX)
+        re_peers = (
+            r"(?P<peer_ip>({})|({}))\s+(?P<bgp_version>\d)\s+"
+            r"(?P<as>{})\s+\d+\s+\d+\s+\d+\s+(?P<updown_time>[a-zA-Z0-9:\*]+)\s+"
+            r"(?P<state>[a-zA-Z0-9\(\)]+)\s+(?P<received_prefixes>\d+)".format(
+                IPV4_ADDR_REGEX, IPV6_ADDR_REGEX, ASN_REGEX
+            )
+        )
+        match_router_id = re.search(re_global_router_id, output_peer, flags=re.M)
+        match_local_as = re.search(re_global_local_as, output_peer, flags=re.M)
+        if match_router_id is None or match_local_as is None:
+            return bgp_detail
+        local_as = int(match_local_as.group("local_as"))
+        bgp_detail["global"] = {}
+        for line in output_peer.splitlines():
+            match_peer = re.search(re_peers, line, flags=re.M)
+            if not match_peer:
+                continue
+            peer_ip = match_peer.group("peer_ip")
+            if neighbor_address and peer_ip != neighbor_address:
+                continue
+            verbose_cmd = "display bgp peer {} verbose".format(peer_ip)
+            peer_output = self.device.send_command(verbose_cmd)
+            re_remote_rid = r"Remote router ID\s+(?P<rid>{})".format(IPV4_ADDR_REGEX)
+            re_received = r"Received total routes:\s*(?P<n>\d+)"
+            re_active = r"Received active routes total:\s*(?P<n>\d+)"
+            re_advertised = r"Advertised total routes:\s*(?P<n>\d+)"
+            re_flap = r"BGP Peer Up count:\s*(?P<n>\d+)"
+            re_holdtime = r"Negotiated: Active Hold Time:\s*(?P<hold>\d+)"
+            m_rid = re.search(re_remote_rid, peer_output, re.M)
+            m_recv = re.search(re_received, peer_output, re.M)
+            m_active = re.search(re_active, peer_output, re.M)
+            m_adv = re.search(re_advertised, peer_output, re.M)
+            m_flap = re.search(re_flap, peer_output, re.M)
+            m_hold = re.search(re_holdtime, peer_output, re.M)
+            is_up = "Established" in match_peer.group("state")
+            remote_as = int(match_peer.group("as"))
+            router_id = m_rid.group("rid") if m_rid else ""
+            received = int(m_recv.group("n")) if m_recv else -1
+            active_count = int(m_active.group("n")) if m_active else -1
+            advertised = int(m_adv.group("n")) if m_adv else -1
+            flap_count = int(m_flap.group("n")) if m_flap else -1
+            hold_time = int(m_hold.group("hold")) if m_hold else -1
+            uptime = -1
+            try:
+                uptime = self.bgp_time_conversion(match_peer.group("updown_time"))
+            except Exception:
+                pass
+            bgp_detail["global"][peer_ip] = [
+                {
+                    "up": is_up,
+                    "local_as": local_as,
+                    "remote_as": remote_as,
+                    "router_id": router_id,
+                    "local_address": "",
+                    "routing_table": "global",
+                    "remote_address": peer_ip,
+                    "open_message": {"hold_time": hold_time, "capabilities": {}},
+                    "active_prefix_count": active_count,
+                    "received_prefix_count": received,
+                    "accepted_prefix_count": active_count,
+                    "suppressed_prefix_count": 0,
+                    "advertised_prefix_count": advertised,
+                    "connection_state": match_peer.group("state"),
+                    "flap_count": flap_count,
+                    "uptime": uptime,
+                }
+            ]
+        return bgp_detail
+
+    # develop
+    def get_bgp_config(self):
 
     # develop
     def get_bgp_config(self):
